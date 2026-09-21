@@ -1,0 +1,32 @@
+{
+    "manifest_version": 3,
+    "name": "CATGuard",
+    "version": "1.0",
+    "description": "CATGuard social media usage monitor",
+
+    "permissions": [
+        "tabs",
+        "storage"
+    ],
+
+    "host_permissions": [
+        "*://*.instagram.com/*",
+        "*://*.youtube.com/*"
+    ],
+
+    "background": {
+        "service_worker": "background.js"
+    },
+
+    "content_scripts": [
+        {
+            "matches": [
+                "*://*.instagram.com/*",
+                "*://*.youtube.com/*"
+            ],
+            "js": [
+                "content.js"
+            ]
+        }
+    ]
+}
