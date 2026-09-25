@@ -6,12 +6,13 @@
 
     "permissions": [
         "tabs",
-        "storage"
+        "storage",
+        "notifications"
     ],
 
     "host_permissions": [
-        "*://*.instagram.com/*",
-        "*://*.youtube.com/*"
+        "https://www.instagram.com/*",
+        "https://www.youtube.com/*"
     ],
 
     "background": {
@@ -21,12 +22,16 @@
     "content_scripts": [
         {
             "matches": [
-                "*://*.instagram.com/*",
-                "*://*.youtube.com/*"
+                "https://www.instagram.com/*",
+                "https://www.youtube.com/*"
             ],
             "js": [
                 "content.js"
             ]
         }
-    ]
+    ],
+
+    "action": {
+        "default_title": "CATGuard"
+    }
 }
