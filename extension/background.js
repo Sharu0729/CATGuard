@@ -7,9 +7,14 @@ const trackedSites = [
     "youtube.com"
 ];
 
+
+// ==========================================
 // TEST LIMITS
+// ==========================================
+
 // Instagram = 30 seconds
 // YouTube = 45 seconds
+
 const siteLimits = {
     "instagram.com": 30,
     "youtube.com": 45
@@ -47,7 +52,9 @@ async function loadUsage(site) {
 
     try {
 
-        const result = await chrome.storage.local.get([site]);
+        const result = await chrome.storage.local.get([
+            site
+        ]);
 
         usageTime = result[site] || 0;
 
@@ -104,6 +111,58 @@ async function saveUsage() {
 
 
 // ==========================================
+// SEND ALERT TO PYTHON
+// ==========================================
+
+async function sendAlertToPython(site) {
+
+    try {
+
+        const response = await fetch(
+            "http://127.0.0.1:5000/alert",
+            {
+                method: "POST",
+
+                headers: {
+                    "Content-Type": "application/json"
+                },
+
+                body: JSON.stringify({
+                    site: site
+                })
+            }
+        );
+
+
+        if (!response.ok) {
+
+            throw new Error(
+                "Python server returned " +
+                response.status
+            );
+        }
+
+
+        const data = await response.json();
+
+
+        console.log(
+            "CATGuard: Python response:",
+            data
+        );
+
+
+    } catch (error) {
+
+        console.error(
+            "CATGuard: Could not connect to Python:",
+            error
+        );
+    }
+}
+
+
+// ==========================================
 // SHOW LIMIT NOTIFICATION
 // ==========================================
 
@@ -114,13 +173,19 @@ function showLimitNotification(site) {
         site
     );
 
+
     chrome.notifications.create(
         "catguard-" + site,
         {
             type: "basic",
+
             iconUrl: "icon128.png",
+
             title: "🐱 CATGuard Alert",
-            message: site + " usage limit reached!"
+
+            message:
+                site +
+                " usage limit reached!"
         }
     );
 }
@@ -133,77 +198,105 @@ function showLimitNotification(site) {
 async function startTimer(site) {
 
     // Same website already running
+
     if (
         timer !== null &&
         currentSite === site
     ) {
+
         return;
     }
 
+
     // Stop previous timer
+
     if (timer !== null) {
 
         clearInterval(timer);
+
         timer = null;
 
         await saveUsage();
     }
 
+
     currentSite = site;
 
-    // Load saved time BEFORE starting timer
+
+    // Load saved usage
+
     await loadUsage(site);
+
 
     console.log(
         "CATGuard timer started:",
         site
     );
 
+
     // ======================================
     // START COUNTING
     // ======================================
 
-    timer = setInterval(async () => {
+    timer = setInterval(
+        async () => {
 
-        usageTime++;
-
-        console.log(
-            "CATGuard:",
-            currentSite,
-            "Usage:",
-            usageTime,
-            "seconds"
-        );
+            usageTime++;
 
 
-        // ==================================
-        // SAVE EVERY 10 SECONDS
-        // ==================================
+            console.log(
+                "CATGuard:",
+                currentSite,
+                "Usage:",
+                usageTime,
+                "seconds"
+            );
 
-        if (usageTime % 10 === 0) {
 
-            await saveUsage();
-        }
+            // ==============================
+            // SAVE EVERY 10 SECONDS
+            // ==============================
+
+            if (usageTime % 10 === 0) {
+
+                await saveUsage();
+            }
 
 
-        // ==================================
-        // CHECK USAGE LIMIT
-        // ==================================
+            // ==============================
+            // CHECK LIMIT
+            // ==============================
 
-        const limit = siteLimits[currentSite];
+            const limit =
+                siteLimits[currentSite];
 
-        if (
-            limit &&
-            usageTime >= limit &&
-            !alertedSites[currentSite]
-        ) {
 
-            alertedSites[currentSite] = true;
+            if (
+                limit &&
+                usageTime >= limit &&
+                !alertedSites[currentSite]
+            ) {
 
-            showLimitNotification(currentSite);
-        }
+                alertedSites[currentSite] = true;
 
-    }, 1000);
+
+                // Chrome notification
+
+                showLimitNotification(
+                    currentSite
+                );
+
+
+                // Send signal to Python
+
+                await sendAlertToPython(
+                    currentSite
+                );
+            }
+
+        },
+        1000
+    );
 }
 
 
@@ -216,16 +309,20 @@ async function stopTimer() {
     if (timer !== null) {
 
         clearInterval(timer);
+
         timer = null;
 
         await saveUsage();
     }
 
+
     console.log(
         "CATGuard timer stopped"
     );
 
+
     currentSite = null;
+
     usageTime = 0;
 }
 
@@ -237,9 +334,12 @@ async function stopTimer() {
 function checkTab(tabId) {
 
     chrome.tabs.get(tabId)
+
         .then((tab) => {
 
-            const site = getSite(tab.url);
+            const site =
+                getSite(tab.url);
+
 
             if (site) {
 
@@ -251,6 +351,7 @@ function checkTab(tabId) {
             }
 
         })
+
         .catch(() => {
 
             console.log(
@@ -268,7 +369,9 @@ function checkTab(tabId) {
 chrome.tabs.onActivated.addListener(
     (activeInfo) => {
 
-        checkTab(activeInfo.tabId);
+        checkTab(
+            activeInfo.tabId
+        );
 
     }
 );
@@ -281,11 +384,17 @@ chrome.tabs.onActivated.addListener(
 chrome.tabs.onUpdated.addListener(
     (tabId, changeInfo, tab) => {
 
-        if (changeInfo.status !== "complete") {
+        if (
+            changeInfo.status !== "complete"
+        ) {
+
             return;
         }
 
-        const site = getSite(tab.url);
+
+        const site =
+            getSite(tab.url);
+
 
         if (site) {
 
