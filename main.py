@@ -7,7 +7,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 
 from PySide6.QtWidgets import QApplication, QLabel
 from PySide6.QtGui import QPixmap, QTransform
-from PySide6.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer, QObject, Signal
 
 
 # =========================================================
@@ -15,6 +15,27 @@ from PySide6.QtCore import Qt, QTimer
 # =========================================================
 
 app = QApplication(sys.argv)
+
+
+# =========================================================
+# QT SIGNALS
+# =========================================================
+
+class CATGuardSignals(QObject):
+    make_angry = Signal(str)
+    make_normal = Signal()
+
+
+signals = CATGuardSignals()
+
+
+# =========================================================
+# PROJECT PATH
+# =========================================================
+
+base_dir = os.path.dirname(
+    os.path.abspath(__file__)
+)
 
 
 # =========================================================
@@ -35,40 +56,16 @@ cat.setAttribute(
 
 
 # =========================================================
-# PROJECT PATH
-# =========================================================
-
-base_dir = os.path.dirname(
-    os.path.abspath(__file__)
-)
-
-
-# =========================================================
 # LOAD WALKING FRAMES
 # =========================================================
 
 image_files = [
-    os.path.join(
-        base_dir,
-        "cat",
-        "cat_walk_1.png"
-    ),
-
-    os.path.join(
-        base_dir,
-        "cat",
-        "cat_walk_2.png"
-    ),
-
-    os.path.join(
-        base_dir,
-        "cat",
-        "cat_walk_3.png"
-    )
+    os.path.join(base_dir, "cat", "cat_walk_1.png"),
+    os.path.join(base_dir, "cat", "cat_walk_2.png"),
+    os.path.join(base_dir, "cat", "cat_walk_3.png")
 ]
 
 frames = []
-
 
 for file in image_files:
 
@@ -76,10 +73,7 @@ for file in image_files:
 
     if pixmap.isNull():
 
-        print(
-            "ERROR: Could not load:",
-            file
-        )
+        print("ERROR: Could not load:", file)
 
         continue
 
@@ -93,20 +87,14 @@ for file in image_files:
     frames.append(pixmap)
 
 
-if len(frames) == 0:
+if not frames:
 
-    print(
-        "ERROR: No cat walking frames loaded!"
-    )
+    print("ERROR: No walking frames loaded!")
 
     sys.exit()
 
 
-print(
-    "CATGuard: Loaded",
-    len(frames),
-    "walking frames"
-)
+print("CATGuard: Loaded", len(frames), "walking frames")
 
 
 # =========================================================
@@ -121,13 +109,9 @@ angry_file = os.path.join(
 
 angry_pixmap = QPixmap(angry_file)
 
-
 if angry_pixmap.isNull():
 
-    print(
-        "ERROR: Could not load angry cat:",
-        angry_file
-    )
+    print("ERROR: Could not load angry cat:", angry_file)
 
 else:
 
@@ -138,27 +122,24 @@ else:
         Qt.TransformationMode.SmoothTransformation
     )
 
-    print(
-        "CATGuard: Angry cat loaded"
-    )
+    print("CATGuard: Angry cat loaded")
 
 
 # =========================================================
-# WALKING ANIMATION ORDER
+# ANIMATION SETTINGS
 # =========================================================
 
-frame_order = [
-    0,
-    1,
-    2,
-    1
-]
+frame_order = [0, 1, 2, 1]
 
 current_frame = 0
 
+is_angry = False
+
+angry_site = None
+
 
 # =========================================================
-# SCREEN
+# SCREEN AND POSITION
 # =========================================================
 
 screen = app.primaryScreen().availableGeometry()
@@ -166,91 +147,92 @@ screen = app.primaryScreen().availableGeometry()
 cat_width = 120
 cat_height = 120
 
-cat.resize(
-    cat_width,
-    cat_height
-)
-
-
-# =========================================================
-# INITIAL POSITION
-# =========================================================
+cat.resize(cat_width, cat_height)
 
 x = screen.right() - cat_width
 
 y = screen.bottom() - cat_height + 1
 
-
-# =========================================================
-# DIRECTION
-# =========================================================
-
-# -1 = LEFT
-# +1 = RIGHT
-
 direction = -1
-
-
-# =========================================================
-# CAT STATE
-# =========================================================
-
-is_angry = False
 
 
 # =========================================================
 # INITIAL CAT
 # =========================================================
 
-cat.setPixmap(
-    frames[frame_order[current_frame]]
-)
+cat.setPixmap(frames[frame_order[current_frame]])
 
-cat.move(
-    x,
-    y
-)
+cat.move(x, y)
 
 cat.show()
+
+
+# =========================================================
+# WALKING TIMER
+# =========================================================
+
+walk_timer = QTimer()
 
 
 # =========================================================
 # MAKE CAT ANGRY
 # =========================================================
 
-def make_cat_angry():
+def make_cat_angry(site):
 
     global is_angry
-
-    if is_angry:
-
-        print(
-            "CATGuard: Cat is already angry."
-        )
-
-        return
+    global angry_site
 
     if angry_pixmap.isNull():
 
-        print(
-            "ERROR: Angry cat image is not available."
-        )
+        print("ERROR: Angry image is unavailable")
 
         return
 
     is_angry = True
 
-    # Stop walking
+    angry_site = site
+
     walk_timer.stop()
 
-    # Show angry cat
+    cat.setPixmap(angry_pixmap)
+
+    cat.show()
+
+    print("CATGuard: Cat is angry because of", site)
+
+
+# =========================================================
+# MAKE CAT NORMAL
+# =========================================================
+
+def make_cat_normal():
+
+    global is_angry
+    global angry_site
+
+    is_angry = False
+
+    angry_site = None
+
     cat.setPixmap(
-        angry_pixmap
+        frames[frame_order[current_frame]]
     )
 
-    print(
-        "CATGuard: Cat is angry!"
-    )
+    cat.show()
+
+    walk_timer.start(100)
+
+    print("CATGuard: Cat returned to normal walking")
+
+
+# =========================================================
+# CONNECT QT SIGNALS
+# =========================================================
+
+signals.make_angry.connect(make_cat_angry)
+
+signals.make_normal.connect(make_cat_normal)
 
 
 # =========================================================
@@ -263,76 +245,33 @@ def walk_cat():
     global x
     global direction
 
-    # -----------------------------------------
-    # DO NOT WALK WHEN ANGRY
-    # -----------------------------------------
-
     if is_angry:
         return
-
-
-    # -----------------------------------------
-    # CHANGE WALKING FRAME
-    # -----------------------------------------
 
     current_frame += 1
 
     if current_frame >= len(frame_order):
-
         current_frame = 0
 
-    frame_number = frame_order[
-        current_frame
-    ]
-
-    pixmap = frames[
-        frame_number
-    ]
-
-
-    # -----------------------------------------
-    # FACE DIRECTION
-    # -----------------------------------------
+    pixmap = frames[frame_order[current_frame]]
 
     if direction == -1:
 
-        # Face LEFT
-
-        cat.setPixmap(
-            pixmap
-        )
+        cat.setPixmap(pixmap)
 
     else:
 
-        # Face RIGHT
-
-        flipped_pixmap = pixmap.transformed(
-            QTransform().scale(
-                -1,
-                1
+        cat.setPixmap(
+            pixmap.transformed(
+                QTransform().scale(-1, 1)
             )
         )
 
-        cat.setPixmap(
-            flipped_pixmap
-        )
-
-
-    # -----------------------------------------
-    # MOVE CAT
-    # -----------------------------------------
-
     step = 3
-
 
     if direction == -1:
 
-        # Move LEFT
-
         x -= step
-
-
-        # LEFT EDGE
 
         if x <= screen.left():
 
@@ -340,150 +279,103 @@ def walk_cat():
 
             direction = 1
 
-
     else:
-
-        # Move RIGHT
 
         x += step
 
-
-        # RIGHT EDGE
-
         if x >= screen.right() - cat_width + 1:
 
-            x = (
-                screen.right()
-                - cat_width
-                + 1
-            )
+            x = screen.right() - cat_width + 1
 
             direction = -1
 
+    cat.move(x, y)
 
-    # -----------------------------------------
-    # UPDATE POSITION
-    # -----------------------------------------
 
-    cat.move(
-        x,
-        y
-    )
+walk_timer.timeout.connect(walk_cat)
+
+walk_timer.start(100)
 
 
 # =========================================================
 # HTTP SERVER
 # =========================================================
 
-class CATGuardRequestHandler(
-    BaseHTTPRequestHandler
-):
+class CATGuardRequestHandler(BaseHTTPRequestHandler):
 
     def do_POST(self):
-
-        # -------------------------------------
-        # ONLY ACCEPT /alert
-        # -------------------------------------
-
-        if self.path != "/alert":
-
-            self.send_response(404)
-
-            self.end_headers()
-
-            return
-
-
-        # -------------------------------------
-        # READ DATA
-        # -------------------------------------
 
         try:
 
             content_length = int(
-                self.headers.get(
-                    "Content-Length",
-                    0
-                )
+                self.headers.get("Content-Length", 0)
             )
 
-            body = self.rfile.read(
-                content_length
-            )
+            body = self.rfile.read(content_length)
 
-            data = json.loads(
-                body.decode("utf-8")
-            )
+            data = json.loads(body.decode("utf-8"))
 
-            site = data.get(
-                "site",
-                "unknown"
-            )
+            action = data.get("action", "alert")
 
+            site = data.get("site", "unknown")
 
-            print(
-                "CATGuard: Alert received from:",
-                site
-            )
+            if self.path == "/alert" and action == "alert":
 
+                print("CATGuard: Limit reached on", site)
 
-            # ---------------------------------
-            # CHANGE CAT ON QT MAIN THREAD
-            # ---------------------------------
+                signals.make_angry.emit(site)
 
-            QTimer.singleShot(
-                0,
-                make_cat_angry
-            )
+            elif self.path == "/normal":
 
+                print("CATGuard: Normal state requested")
 
-            # ---------------------------------
-            # SEND SUCCESS RESPONSE
-            # ---------------------------------
+                signals.make_normal.emit()
+
+            else:
+
+                self.send_response(404)
+
+                self.end_headers()
+
+                return
 
             self.send_response(200)
 
-            self.send_header(
-                "Content-Type",
-                "application/json"
-            )
+            self.send_header("Content-Type", "application/json")
+
+            self.send_header("Access-Control-Allow-Origin", "*")
 
             self.end_headers()
 
-            response = {
-                "status": "success",
-                "message": "Cat became angry",
-                "site": site
-            }
-
             self.wfile.write(
-                json.dumps(
-                    response
-                ).encode("utf-8")
+                json.dumps({
+                    "status": "success",
+                    "action": action,
+                    "site": site
+                }).encode("utf-8")
             )
-
 
         except Exception as error:
 
-            print(
-                "CATGuard server error:",
-                error
-            )
+            print("CATGuard server error:", error)
 
             self.send_response(500)
 
             self.end_headers()
 
+    def do_OPTIONS(self):
 
-    # -----------------------------------------
-    # KEEP TERMINAL CLEAN
-    # -----------------------------------------
+        self.send_response(200)
 
-    def log_message(
-        self,
-        format,
-        *args
-    ):
+        self.send_header("Access-Control-Allow-Origin", "*")
+
+        self.send_header("Access-Control-Allow-Methods", "POST, OPTIONS")
+
+        self.send_header("Access-Control-Allow-Headers", "Content-Type")
+
+        self.end_headers()
+
+    def log_message(self, format, *args):
 
         return
 
@@ -497,30 +389,19 @@ def start_server():
     try:
 
         server = HTTPServer(
-            (
-                "127.0.0.1",
-                5000
-            ),
+            ("127.0.0.1", 5000),
             CATGuardRequestHandler
         )
 
-        print(
-            "CATGuard: Local server started"
-        )
+        print("CATGuard: Local server started")
 
-        print(
-            "CATGuard: Waiting for Chrome alerts..."
-        )
+        print("CATGuard: Waiting for Chrome alerts...")
 
         server.serve_forever()
 
-
     except Exception as error:
 
-        print(
-            "CATGuard server failed:",
-            error
-        )
+        print("CATGuard server failed:", error)
 
 
 server_thread = threading.Thread(
@@ -532,22 +413,7 @@ server_thread.start()
 
 
 # =========================================================
-# WALKING TIMER
-# =========================================================
-
-walk_timer = QTimer()
-
-walk_timer.timeout.connect(
-    walk_cat
-)
-
-walk_timer.start(100)
-
-
-# =========================================================
 # START APPLICATION
 # =========================================================
 
-sys.exit(
-    app.exec()
-)
+sys.exit(app.exec())
